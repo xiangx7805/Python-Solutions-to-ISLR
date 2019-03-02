@@ -1,0 +1,179 @@
+---
+title: "ISLR-HW5"
+author: "Xiang XU"
+date: "2/28/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##3
+```{r}
+x = -2:2
+y = 1+x-2*(x-1)^2*I(x>1)
+plot(x,y)
+```
+
+##9 
+```{r,warning=FALSE}
+library(MASS)
+data(Boston)
+
+#a)
+reg = lm(nox~poly(dis,3),data=Boston)
+summary(reg)
+coef(reg)
+reg.pred <- predict(reg,dis=list(Boston$dis))
+plot(nox~dis,data=Boston)
+lines(Boston$dis,reg.pred,col="red",lwd=2)
+
+#b)
+rss <- rep(NA,10)
+for (i in 1:10){
+  reg <- lm(nox~poly(dis,i),data=Boston)
+  rss[i] <- sum(reg$residuals^2)
+}
+rss
+# We can see that as i increases, the RSS decreases.
+
+#c
+library(boot)
+error <- rep(NA,10)
+for (i in 1:10){
+  reg <- glm(nox~poly(dis,i),data=Boston)
+  error[i] <- cv.glm(Boston,reg,K=10)$delta[2]
+}
+plot(1:10,error,xlab="Degree",ylab="CV error",type="line")
+#From the plot, we may want to select degree of three.
+
+#d
+library(splines)
+reg <- lm(nox~bs(dis,df=4,knots=c(4,7,11)),data=Boston)
+summary(reg)
+pred <- predict(reg,dis=list(Boston$dis))
+plot(nox~dis,data=Boston)
+lines(Boston$dis,pred,col="red")
+
+#e
+rss <- rep(NA,17)
+for (i in 3:20){ #df should be greater than three
+  reg <- lm(nox~bs(dis,df=i),data=Boston)
+  rss[i] <- sum(reg$residuals^2)
+}
+rss[3:20]
+
+#f
+error <- rep(NA,20)
+for (i in 3:20){
+  reg <- glm(nox~bs(dis,df=i),data=Boston)
+  error[i] <- cv.glm(Boston,reg,K=10)$delta[2]
+}
+plot(3:20,error[3:20],xlab="df",ylab="CV error",type="l")
+```
+
+##10
+```{r}
+#a
+set.seed(1)
+library(ISLR)
+library(leaps)
+data("College")
+train <- sample(length(College$Outstate),length(College$Outstate)/2)
+Col.train <- College[train,]
+Col.test <- College[-train,]
+reg <- regsubsets(Outstate~.,data=Col.train,nvmax=17,method = "forward")
+reg.sum <- summary(reg)
+par(mfrow=c(1,3))
+plot(reg.sum$cp,xlab="Number of Variables",ylab="Cp",type="l")
+min.cp = min(reg.sum$cp)
+std.cp = sd(reg.sum$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "red", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "red", lty = 2)
+plot(reg.sum$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+min.bic = min(reg.sum$bic)
+std.bic = sd(reg.sum$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "red", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "red", lty = 2)
+plot(reg.sum$adjr2, xlab = "Number of Variables", ylab = "Adjusted R2", 
+    type = "l", ylim = c(0.4, 0.84))
+max.adjr2 = max(reg.sum$adjr2)
+std.adjr2 = sd(reg.sum$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "red", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "red", lty = 2)
+#From these plot, we may want to select 6 as the best subset size. 
+
+#b
+library(gam)
+reg <- gam(Outstate~Private+s(Room.Board,df=2)+s(PhD,df=2)+
+             s(perc.alumni, df = 2) + s(Expend, df = 5) + 
+             s(Grad.Rate, df = 2), data = Col.train)
+par(mfrow=c(2,3))
+plot(reg,se=T,col="blue")
+
+#c
+pred <- predict(reg,Col.test)
+error <- mean((Col.test$Outstate-pred)^2)
+error
+
+tss = mean((Col.test$Outstate - mean(Col.test$Outstate))^2)
+test.rss = 1 - error/tss
+test.rss
+#Using 6 variables, we got a R-square of 77%.
+
+#d
+summary(reg)
+#From the Nonparametric Effects' Anova: 
+#A strong evidence of non-linear relationship between response variable and expend. 
+```
+
+#11
+```{r}
+#a
+set.seed(1)
+X1 = rnorm(100)
+X2 = rnorm(100)
+eps = rnorm(100, sd = 0.1)
+Y = -2.1 + 1.3 * X1 + 0.54 * X2 + eps
+
+#b
+beta0 = rep(NA, 1000)
+beta1 = rep(NA, 1000)
+beta2 = rep(NA, 1000)
+beta1[1] = 18
+
+#c
+for (i in 1:1000) {
+    a = Y - beta1[i] * X1
+    beta2[i] = lm(a ~ X2)$coef[2]
+    a = Y - beta2[i] * X2
+    lm.fit = lm(a ~ X1)
+    if (i < 1000) {
+        beta1[i + 1] = lm.fit$coef[2]
+    }
+    beta0[i] = lm.fit$coef[1]
+}
+plot(1:1000, beta0, type = "l", xlab = "iteration", ylab = "betas", ylim = c(-2.2, 
+    1.6), col = "green")
+lines(1:1000, beta1, col = "red")
+lines(1:1000, beta2, col = "blue")
+legend("center", c("beta0", "beta1", "beta2"), lty = 1, col = c("green", "red", 
+    "blue"))
+#Notice that the coefficients quickly attain stable points.
+
+#f
+lm.fit = lm(Y ~ X1 + X2)
+plot(1:1000, beta0, type = "l", xlab = "iteration", ylab = "betas", ylim = c(-2.2, 
+    1.6), col = "green")
+lines(1:1000, beta1, col = "red")
+lines(1:1000, beta2, col = "blue")
+abline(h = lm.fit$coef[1], lty = "dashed", lwd = 3, col = rgb(0, 0, 0, alpha = 0.4))
+abline(h = lm.fit$coef[2], lty = "dashed", lwd = 3, col = rgb(0, 0, 0, alpha = 0.4))
+abline(h = lm.fit$coef[3], lty = "dashed", lwd = 3, col = rgb(0, 0, 0, alpha = 0.4))
+legend("center", c("beta0", "beta1", "beta2", "multiple regression"), lty = c(1, 
+    1, 1, 2), col = c("green", "red", "blue", "black"))
+
+#g 
+# We only need one iteration to obtain a good approximation.
+```
